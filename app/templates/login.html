@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Connexion — Univers Diaspora{% endblock %}
+{% block body %}
+<div class="min-h-full flex flex-col items-center justify-center p-4 sm:p-6">
+  <div class="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-ud-navy/10">
+    <div class="mb-8">
+      {% include "partials/brand_lockup.html" %}
+      <h1 class="font-heading mt-6 text-center text-xl font-bold text-ud-navy">Espace interne</h1>
+      <p class="mt-1 text-center text-sm text-slate-600">Connectez-vous pour accéder aux canaux</p>
+    </div>
+    {% if notice %}
+    <div class="mb-4 rounded-lg bg-ud-blue/10 px-3 py-2 text-sm text-ud-navy ring-1 ring-ud-blue/20">{{ notice }}</div>
+    {% endif %}
+    {% if error %}
+    <div class="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/login" class="space-y-4">
+      <div>
+        <label for="email" class="mb-1 block text-sm font-medium text-ud-navy">E-mail</label>
+        <input id="email" name="email" type="email" autocomplete="username" required
+          class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base shadow-sm focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25" />
+      </div>
+      <div>
+        <label for="password" class="mb-1 block text-sm font-medium text-ud-navy">Mot de passe</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required
+          class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base shadow-sm focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25" />
+      </div>
+      <button type="submit"
+        class="w-full rounded-lg bg-ud-gold py-3 text-sm font-semibold text-ud-navy shadow hover:bg-ud-goldHover focus:outline-none focus:ring-2 focus:ring-ud-gold/50 active:scale-[0.99] transition">
+        Se connecter
+      </button>
+    </form>
+    {% if allow_registration %}
+    <p class="mt-6 text-center text-sm text-slate-600">
+      Pas encore de compte ?
+      <a href="/register" class="font-medium text-ud-blue hover:text-ud-navy hover:underline">Créer un compte</a>
+    </p>
+    {% endif %}
+    <p class="mt-3 text-center text-xs text-slate-400">Compte administrateur initial : admin@entreprise.local / admin123</p>
+  </div>
+</div>
+{% endblock %}

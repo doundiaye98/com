@@ -1,0 +1,1 @@
+# Plateforme de communication interne

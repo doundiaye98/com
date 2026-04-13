@@ -1,0 +1,32 @@
+/* Charte Univers Diaspora — finitions UI */
+:root {
+  --ud-navy: #002157;
+  --ud-blue: #4a76b2;
+  --ud-gold: #d4af37;
+}
+
+.messages-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(74, 118, 178, 0.45) transparent;
+}
+.messages-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.messages-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 33, 87, 0.25);
+  border-radius: 999px;
+}
+.messages-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 33, 87, 0.4);
+}
+
+.safe-pb {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+/* Titres : Montserrat via utility font-heading dans les templates */
+h1.font-heading,
+h2.font-heading,
+h3.font-heading {
+  letter-spacing: 0.02em;
+}

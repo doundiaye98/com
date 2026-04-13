@@ -1,0 +1,965 @@
+{% extends "base.html" %}
+{% block title %}Canaux — Communication interne{% endblock %}
+{% block body %}
+<div
+  class="h-[100dvh] flex flex-col md:flex-row overflow-hidden"
+  x-data="chatApp({{ active_channel_id or 'null' }})"
+  x-init="init()"
+>
+  <!-- Overlay mobile -->
+  <div
+    x-show="sidebarOpen"
+    x-transition.opacity
+    class="fixed inset-0 z-40 bg-black/40 md:hidden"
+    @click="sidebarOpen = false"
+    x-cloak
+  ></div>
+
+  <!-- Sidebar -->
+  <aside
+    class="fixed inset-y-0 left-0 z-50 flex w-[min(100vw-3rem,280px)] flex-col bg-ud-navy text-white shadow-xl transition-transform duration-200 md:static md:z-0 md:w-60 md:min-w-[15rem] md:shadow-none md:translate-x-0"
+    :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
+  >
+    <div class="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-white/10 px-2 py-2 md:px-3">
+      {% with title='Communication interne' %}{% include "partials/brand_compact.html" %}{% endwith %}
+      <button type="button" class="shrink-0 rounded p-2 md:hidden hover:bg-white/10" @click="sidebarOpen = false" aria-label="Fermer le menu">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-2 py-3 md:py-4">
+      <div class="mb-2 flex items-center justify-between gap-2 px-2">
+        <p class="text-[11px] font-semibold uppercase tracking-wider text-white/50">Canaux généraux</p>
+        <button
+          type="button"
+          @click="openNewGlobalChannel()"
+          class="rounded-md bg-white/15 px-2 py-1 text-xs font-semibold text-white hover:bg-white/25"
+        >
+          + Canal
+        </button>
+      </div>
+      <ul class="space-y-0.5">
+        <template x-for="ch in globalChannels" :key="ch.id">
+          <li class="flex items-stretch gap-0.5">
+            <button
+              type="button"
+              @click="selectChannel(ch.id)"
+              class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-[15px] hover:bg-white/10"
+              :class="activeId === ch.id && currentView === 'channel' ? 'bg-ud-blue text-white' : 'text-white/90'"
+            >
+              <span class="shrink-0 text-white/60">#</span>
+              <span class="truncate" x-text="ch.display_label || ch.name"></span>
+            </button>
+            <button
+              type="button"
+              class="shrink-0 rounded-md p-2 text-white/45 hover:bg-red-600/35 hover:text-white"
+              x-show="canDeleteChannel(ch)"
+              @click.stop="deleteChannel(ch)"
+              title="Supprimer ce canal"
+              aria-label="Supprimer ce canal"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </li>
+        </template>
+      </ul>
+
+      <div class="mt-4 border-t border-white/10 px-2 pt-4">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-white/50">Groupes (services)</p>
+          <button
+            type="button"
+            @click="showNewGroupModal = true"
+            class="rounded-md bg-white/15 px-2 py-1 text-xs font-semibold text-white hover:bg-white/25"
+          >
+            + Groupe
+          </button>
+        </div>
+        <template x-for="grp in sidebarGroups" :key="grp.group.id">
+          <div class="mb-3 rounded-lg bg-black/25 px-1.5 py-2">
+            <div class="mb-1 flex items-center justify-between gap-1 px-1">
+              <button
+                type="button"
+                class="min-w-0 truncate text-left text-xs font-bold uppercase tracking-wide text-white/90 hover:underline"
+                @click="openGroupFirstChannel(grp)"
+                x-text="grp.group.name"
+                title="Ouvrir le premier canal du groupe"
+              ></button>
+              <div class="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  x-show="grp.can_manage"
+                  @click="openInviteModal(grp)"
+                  class="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white/80 hover:bg-white/15"
+                  title="Ajouter un membre"
+                >+M</button>
+                <button
+                  type="button"
+                  x-show="grp.can_manage"
+                  @click="openNewGroupChannel(grp)"
+                  class="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white/80 hover:bg-white/15"
+                  title="Nouveau canal dans ce groupe"
+                >+#</button>
+                <button
+                  type="button"
+                  x-show="grp.can_manage"
+                  @click="deleteGroup(grp)"
+                  class="rounded px-1.5 py-0.5 text-[10px] font-semibold text-red-300/90 hover:bg-red-600/40"
+                  title="Supprimer le groupe"
+                >×</button>
+              </div>
+            </div>
+            <ul class="space-y-0.5">
+              <template x-for="ch in grp.channels" :key="ch.id">
+                <li class="flex items-stretch gap-0.5">
+                  <button
+                    type="button"
+                    @click="selectChannel(ch.id)"
+                    class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-[14px] hover:bg-white/10"
+                    :class="activeId === ch.id && currentView === 'channel' ? 'bg-ud-blue text-white' : 'text-white/90'"
+                  >
+                    <span class="shrink-0 text-white/60">#</span>
+                    <span class="truncate" x-text="ch.display_label || ch.name"></span>
+                  </button>
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-md p-1.5 text-white/45 hover:bg-red-600/35 hover:text-white"
+                    x-show="canDeleteChannel(ch)"
+                    @click.stop="deleteChannel(ch)"
+                    title="Supprimer ce canal"
+                    aria-label="Supprimer ce canal"
+                  >
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                  </button>
+                </li>
+              </template>
+            </ul>
+            <p x-show="!grp.channels.length" class="px-2 py-1 text-[11px] text-white/45">Aucun canal — utilisez +# si vous gérez ce groupe.</p>
+          </div>
+        </template>
+      </div>
+
+      <div class="mt-4 border-t border-white/10 px-2 pt-4">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-white/50">Messages directs</p>
+          <button
+            type="button"
+            @click="openNewDm()"
+            class="rounded-md bg-white/15 px-2 py-1 text-xs font-semibold text-white hover:bg-white/25"
+          >
+            + Message
+          </button>
+        </div>
+        <ul class="space-y-0.5">
+          <template x-for="dm in dmConversations" :key="dm.channel_id">
+            <li class="flex items-stretch gap-0.5">
+              <button
+                type="button"
+                @click="selectDm(dm)"
+                class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left text-[15px] hover:bg-white/10"
+                :class="activeId === dm.channel_id && currentView === 'dm' ? 'bg-ud-blue text-white' : 'text-white/90'"
+              >
+                <span class="shrink-0 text-white/60">@</span>
+                <span class="truncate" x-text="dm.peer_display_name"></span>
+              </button>
+              <button
+                type="button"
+                class="shrink-0 rounded-md p-2 text-white/45 hover:bg-red-600/35 hover:text-white"
+                @click.stop="deleteDm(dm)"
+                title="Supprimer la conversation"
+                aria-label="Supprimer la conversation"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </nav>
+    <div class="safe-pb shrink-0 border-t border-white/10 p-3">
+      <div class="flex items-center gap-2 rounded-lg bg-black/20 px-2 py-2">
+        {% if user.avatar_filename %}
+        <img src="/media/avatars/{{ user.avatar_filename }}" alt="" class="h-9 w-9 shrink-0 rounded-md object-cover ring-1 ring-white/20" />
+        {% else %}
+        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/20 text-sm font-bold">{{ user.display_name[:1] | upper }}</div>
+        {% endif %}
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-medium">{{ user.display_name }}</p>
+          <p class="truncate text-xs text-white/60">{{ user.email }}</p>
+        </div>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <a href="/profile" class="rounded-md bg-white/10 px-2 py-1.5 text-xs font-medium hover:bg-white/20">Mon profil</a>
+        {% if user.is_admin %}
+        <a href="/admin" class="rounded-md bg-white/10 px-2 py-1.5 text-xs font-medium hover:bg-white/20">Administration</a>
+        {% endif %}
+        <a href="/logout" class="rounded-md px-2 py-1.5 text-xs text-white/70 hover:bg-white/10">Déconnexion</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Zone principale -->
+  <main class="flex min-w-0 flex-1 flex-col bg-white md:rounded-none">
+    <header class="shrink-0 border-b border-ud-navy/10 bg-white px-3 py-2 shadow-sm md:px-4 md:py-3">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex min-w-0 items-center gap-2">
+          <button type="button" class="rounded-lg p-2 hover:bg-slate-100 md:hidden" @click="sidebarOpen = true" aria-label="Ouvrir les canaux">
+            <svg class="h-6 w-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+          <div class="min-w-0 flex-1">
+            <h2 class="font-heading truncate text-lg font-bold text-ud-navy">
+              <span class="text-ud-blue/70" x-text="currentView === 'dm' ? '@' : '#'"></span><span x-text="activeName"></span>
+            </h2>
+            <p class="truncate text-xs text-slate-600" x-text="activeTopic"></p>
+          </div>
+        </div>
+        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div class="flex shrink-0 items-center gap-2">
+            <span
+              class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+              :class="wsLive ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'"
+              role="status"
+              x-text="wsLive ? '● Temps réel' : '○ Hors ligne'"
+            ></span>
+            <button
+              type="button"
+              x-show="!wsLive && activeId"
+              @click="reconnectWs()"
+              class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Reconnecter
+            </button>
+          </div>
+          <div class="flex min-w-0 flex-1 flex-wrap items-stretch gap-2 sm:min-w-[280px]">
+            <label class="sr-only" for="channel-search">Rechercher dans la conversation</label>
+            <input
+              id="channel-search"
+              type="search"
+              x-model="searchQuery"
+              placeholder="Rechercher dans les messages…"
+              class="min-w-[8rem] flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25"
+              @keydown.enter.prevent="loadMessages"
+            />
+            <button
+              type="button"
+              @click="loadMessages()"
+              class="shrink-0 rounded-lg bg-ud-gold px-4 py-2.5 text-sm font-semibold text-ud-navy shadow hover:bg-ud-goldHover focus:outline-none focus:ring-2 focus:ring-ud-gold/50"
+            >
+              Filtrer
+            </button>
+            <button
+              type="button"
+              @click="clearSearch()"
+              class="shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Tout afficher
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div
+      id="msg-list"
+      class="messages-scroll flex-1 overflow-y-auto px-3 py-4 md:px-6"
+      x-ref="scroll"
+    >
+      <template x-for="m in messages" :key="m.id">
+        <article class="group mb-4 flex gap-3">
+          <img x-show="m.author_avatar_url" :src="m.author_avatar_url" alt="" class="h-9 w-9 shrink-0 rounded-md bg-slate-200 object-cover" />
+          <div x-show="!m.author_avatar_url" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-200 text-xs font-bold text-slate-600" x-text="initials(m.author_name)"></div>
+          <div class="min-w-0 flex-1">
+            <div x-show="editingId !== m.id">
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+                <span class="font-bold text-slate-800" x-text="m.author_name"></span>
+                <time class="text-xs text-slate-400" x-text="formatTime(m.created_at)"></time>
+                <span x-show="m.edited_at" class="text-xs text-slate-400">(modifié)</span>
+              </div>
+              <p class="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-slate-700" x-text="m.body"></p>
+              <div class="mt-1 flex flex-wrap gap-3 text-xs text-ud-blue" x-show="canEdit(m) || canDelete(m)">
+                <button type="button" class="font-medium hover:underline" x-show="canEdit(m)" @click="startEdit(m)">Modifier</button>
+                <button type="button" class="font-medium text-red-600 hover:underline" x-show="canDelete(m)" @click="removeMessage(m)">Supprimer</button>
+              </div>
+            </div>
+            <div x-show="editingId === m.id" x-cloak class="mt-1">
+              <textarea x-model="editDraft" rows="3" class="w-full rounded-lg border border-slate-300 p-2 text-[15px] focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25"></textarea>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button type="button" @click="saveEdit(m.id)" class="rounded-md bg-ud-gold px-3 py-1.5 text-sm font-semibold text-ud-navy hover:bg-ud-goldHover">Enregistrer</button>
+                <button type="button" @click="cancelEdit" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Annuler</button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </template>
+      <p x-show="!messages.length && activeId" class="text-center text-sm text-slate-400">Aucun message à afficher.</p>
+    </div>
+
+    <form class="safe-pb shrink-0 border-t border-slate-200 bg-slate-50 p-3 md:p-4" @submit.prevent="send">
+      <div class="flex gap-2 rounded-lg border border-slate-300 bg-white p-1 shadow-sm focus-within:border-ud-blue focus-within:ring-2 focus-within:ring-ud-blue/20">
+        <label for="composer" class="sr-only">Message</label>
+        <textarea
+          id="composer"
+          x-model="draft"
+          @keydown.enter.exact.prevent="send"
+          rows="1"
+          placeholder="Écrire un message…"
+          class="max-h-40 min-h-[44px] flex-1 resize-none border-0 bg-transparent px-3 py-2.5 text-base text-slate-800 placeholder:text-slate-400 focus:ring-0"
+        ></textarea>
+        <button
+          type="submit"
+          class="shrink-0 self-end rounded-md bg-ud-gold px-4 py-2 text-sm font-semibold text-ud-navy hover:bg-ud-goldHover disabled:opacity-50"
+          :disabled="sending || !draft.trim()"
+        >Envoyer</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- Nouveau canal -->
+  <div
+    x-show="showNewChannel"
+    x-cloak
+    class="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+    @keydown.escape.window="closeNewChannelModal()"
+    @click.self="closeNewChannelModal()"
+  >
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" @click.stop role="dialog" aria-labelledby="new-ch-title">
+           <h3 id="new-ch-title" class="font-heading text-lg font-bold text-ud-navy">Nouveau canal</h3>
+      <p class="mt-1 text-sm font-medium text-ud-blue" x-show="newChannelGroupLabel" x-text="'Dans le groupe : ' + newChannelGroupLabel"></p>
+      <p class="mt-1 text-sm text-slate-600">Un nom court, sans espaces (lettres, chiffres, tirets). Vous pourrez le supprimer plus tard.</p>
+      <div class="mt-4 space-y-3">
+        <div>
+          <label class="mb-1 block text-sm font-medium text-slate-700" for="new-ch-name">Nom du canal</label>
+          <input
+            id="new-ch-name"
+            type="text"
+            x-model="newChannelName"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25"
+            placeholder="ex. annonces"
+            autocomplete="off"
+          />
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium text-slate-700" for="new-ch-topic">Sujet (optionnel)</label>
+          <input
+            id="new-ch-topic"
+            type="text"
+            x-model="newChannelTopic"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25"
+            placeholder="De quoi parle ce canal ?"
+          />
+        </div>
+      </div>
+      <div class="mt-6 flex flex-wrap justify-end gap-2">
+        <button type="button" @click="showNewChannel = false" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Annuler</button>
+        <button type="button" @click="submitNewChannel()" class="rounded-lg bg-ud-gold px-4 py-2 text-sm font-semibold text-ud-navy hover:bg-ud-goldHover">Créer</button>
+      </div>
+    </div>
+   </div>
+
+  <!-- Nouveau groupe (service) -->
+  <div
+    x-show="showNewGroupModal"
+    x-cloak
+    class="fixed inset-0 z-[72] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+    @keydown.escape.window="showNewGroupModal = false"
+    @click.self="showNewGroupModal = false"
+  >
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" @click.stop role="dialog">
+      <h3 class="font-heading text-lg font-bold text-ud-navy">Nouveau groupe</h3>
+      <p class="mt-1 text-sm text-slate-600">Créez un espace pour votre service. Vous pourrez y ajouter des collègues et des canaux privés à ce groupe.</p>
+      <div class="mt-4 space-y-3">
+        <div>
+          <label class="mb-1 block text-sm font-medium text-slate-700">Nom du groupe</label>
+          <input type="text" x-model="newGroupName" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base" placeholder="ex. Service RH" />
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium text-slate-700">Description (optionnel)</label>
+          <textarea x-model="newGroupDescription" rows="2" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Rôle du groupe…"></textarea>
+        </div>
+      </div>
+      <div class="mt-6 flex flex-wrap justify-end gap-2">
+        <button type="button" @click="showNewGroupModal = false" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Annuler</button>
+        <button type="button" @click="submitNewGroup()" class="rounded-lg bg-ud-gold px-4 py-2 text-sm font-semibold text-ud-navy hover:bg-ud-goldHover">Créer le groupe</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inviter un membre dans un groupe -->
+  <div
+    x-show="showInviteModal"
+    x-cloak
+    class="fixed inset-0 z-[73] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+    @keydown.escape.window="showInviteModal = false"
+    @click.self="showInviteModal = false"
+  >
+    <div class="max-h-[85vh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl" @click.stop role="dialog">
+      <div class="border-b border-slate-200 p-4">
+        <h3 class="font-heading text-lg font-bold text-ud-navy">Ajouter un membre</h3>
+        <p class="mt-1 text-sm text-slate-600">Groupe : <span class="font-medium" x-text="inviteTargetGroup && inviteTargetGroup.group ? inviteTargetGroup.group.name : ''"></span></p>
+        <input type="search" x-model="inviteSearch" placeholder="Filtrer par nom…" class="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      </div>
+      <ul class="max-h-[50vh] overflow-y-auto p-2">
+        <template x-for="u in filteredInviteUsers" :key="u.id">
+          <li>
+            <button type="button" @click="inviteUserToGroup(u.id)" class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-ud-surface">
+              <span class="truncate font-medium text-slate-800" x-text="u.display_name"></span>
+            </button>
+          </li>
+        </template>
+      </ul>
+      <div class="flex justify-end border-t border-slate-200 p-3">
+        <button type="button" @click="showInviteModal = false" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nouveau message direct -->
+  <div
+    x-show="showNewDm"
+    x-cloak
+    class="fixed inset-0 z-[75] flex items-end justify-center bg-black/50 p-4 sm:items-center"
+    @keydown.escape.window="showNewDm = false"
+    @click.self="showNewDm = false"
+  >
+    <div class="max-h-[85vh] w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl" @click.stop role="dialog" aria-labelledby="new-dm-title">
+      <div class="border-b border-slate-200 p-4">
+        <h3 id="new-dm-title" class="font-heading text-lg font-bold text-ud-navy">Nouveau message direct</h3>
+        <p class="mt-1 text-sm text-slate-600">Choisissez un collègue pour démarrer une conversation privée.</p>
+        <input
+          type="search"
+          x-model="dmSearch"
+          placeholder="Filtrer par nom…"
+          class="mt-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25"
+        />
+      </div>
+      <ul class="max-h-[50vh] overflow-y-auto p-2">
+        <template x-for="u in filteredDmUsers" :key="u.id">
+          <li>
+            <button
+              type="button"
+              @click="startDmWith(u.id)"
+              class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-ud-surface"
+            >
+              <img x-show="u.avatar_url" :src="u.avatar_url" alt="" class="h-9 w-9 rounded-md object-cover" />
+              <div x-show="!u.avatar_url" class="flex h-9 w-9 items-center justify-center rounded-md bg-ud-navy/10 text-xs font-bold text-ud-navy" x-text="initials(u.display_name)"></div>
+              <span class="truncate font-medium text-slate-800" x-text="u.display_name"></span>
+            </button>
+          </li>
+        </template>
+      </ul>
+      <div class="flex justify-end border-t border-slate-200 p-3">
+        <button type="button" @click="showNewDm = false" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>[x-cloak]{display:none!important}</style>
+<script>
+function chatApp(initialChannelId) {
+  const _sidebar = {{ sidebar_initial | tojson }};
+  return {
+    sidebarOpen: false,
+    globalChannels: _sidebar.global_channels || [],
+    sidebarGroups: _sidebar.groups || [],
+    activeId: initialChannelId,
+    messages: [],
+    draft: '',
+    sending: false,
+    wsToken: '',
+    ws: null,
+    wsLive: false,
+    _reconnTimer: null,
+    _wsFailures: 0,
+    searchQuery: '',
+    editingId: null,
+    editDraft: '',
+    currentUserId: {{ user.id }},
+    isAdmin: {{ user.is_admin | tojson }},
+    editWindowMs: {{ message_edit_minutes }} * 60 * 1000,
+    showNewChannel: false,
+    newChannelGroupId: null,
+    newChannelGroupLabel: '',
+    newChannelName: '',
+    newChannelTopic: '',
+    showNewGroupModal: false,
+    newGroupName: '',
+    newGroupDescription: '',
+    showInviteModal: false,
+    inviteTargetGroup: null,
+    inviteSearch: '',
+    inviteUserPicker: [],
+    currentView: 'channel',
+    activePeerName: '',
+    dmConversations: [],
+    showNewDm: false,
+    dmUserPicker: [],
+    dmSearch: '',
+    _presenceTimer: null,
+
+    allChannelsFlat() {
+      return [...this.globalChannels, ...this.sidebarGroups.flatMap(g => g.channels || [])];
+    },
+    findChannelById(id) {
+      return this.allChannelsFlat().find(ch => ch.id === id) || null;
+    },
+    firstPickChannel() {
+      if (this.globalChannels.length) return this.globalChannels[0].id;
+      for (const g of this.sidebarGroups) {
+        if (g.channels && g.channels.length) return g.channels[0].id;
+      }
+      return null;
+    },
+
+    get activeName() {
+      if (this.currentView === 'dm' && this.activePeerName) return this.activePeerName;
+      const c = this.findChannelById(this.activeId);
+      return c ? (c.display_label || c.name) : '';
+    },
+    get activeTopic() {
+      if (this.currentView === 'dm') return 'Conversation privée — visible uniquement par vous deux';
+      const c = this.findChannelById(this.activeId);
+      if (c && c.topic) return c.topic;
+      return 'Messages de l’équipe';
+    },
+    get filteredDmUsers() {
+      const q = this.dmSearch.trim().toLowerCase();
+      if (!q) return this.dmUserPicker;
+      return this.dmUserPicker.filter(u => u.display_name.toLowerCase().includes(q));
+    },
+    get filteredInviteUsers() {
+      const q = this.inviteSearch.trim().toLowerCase();
+      let list = this.inviteUserPicker;
+      if (q) list = list.filter(u => u.display_name.toLowerCase().includes(q));
+      return list;
+    },
+
+    canEdit(m) {
+      if (m.user_id !== this.currentUserId) return false;
+      const t = new Date(m.created_at).getTime();
+      return (Date.now() - t) <= this.editWindowMs;
+    },
+    canDelete(m) {
+      return m.user_id === this.currentUserId || this.isAdmin;
+    },
+
+    canDeleteChannel(ch) {
+      return !!(ch && ch.can_delete);
+    },
+
+    openNewGlobalChannel() {
+      this.newChannelGroupId = null;
+      this.newChannelGroupLabel = '';
+      this.showNewChannel = true;
+    },
+    openNewGroupChannel(grp) {
+      this.newChannelGroupId = grp.group.id;
+      this.newChannelGroupLabel = grp.group.name;
+      this.showNewChannel = true;
+    },
+    closeNewChannelModal() {
+      this.showNewChannel = false;
+      this.newChannelGroupId = null;
+      this.newChannelGroupLabel = '';
+    },
+
+    async refreshSidebar() {
+      const cr = await fetch('/api/chat-sidebar', { credentials: 'same-origin' });
+      if (!cr.ok) return;
+      const j = await cr.json();
+      this.globalChannels = j.global_channels || [];
+      this.sidebarGroups = j.groups || [];
+    },
+
+    async refreshDmList() {
+      const r = await fetch('/api/dm/conversations', { credentials: 'same-origin' });
+      if (!r.ok) return;
+      this.dmConversations = await r.json();
+    },
+
+    async openNewDm() {
+      this.dmSearch = '';
+      const r = await fetch('/api/users/for-dm', { credentials: 'same-origin' });
+      if (r.ok) this.dmUserPicker = await r.json();
+      else this.dmUserPicker = [];
+      this.showNewDm = true;
+    },
+
+    async startDmWith(peerId) {
+      const res = await fetch('/api/dm/open', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ peer_user_id: peerId }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof j.detail === 'string' ? j.detail : 'Impossible d’ouvrir la conversation');
+        return;
+      }
+      this.showNewDm = false;
+      await this.refreshDmList();
+      await this.selectDm(j);
+    },
+
+    async selectDm(conv) {
+      this.closeWs();
+      this.currentView = 'dm';
+      this.activeId = conv.channel_id;
+      this.activePeerName = conv.peer_display_name;
+      this.sidebarOpen = false;
+      this.editingId = null;
+      await this.loadMessages();
+      this.openWs(conv.channel_id);
+    },
+
+    async deleteDm(dm) {
+      if (!confirm('Supprimer la conversation avec ' + dm.peer_display_name + ' ? Les messages seront effacés.')) return;
+      const res = await fetch('/api/channels/' + dm.channel_id, { method: 'DELETE', credentials: 'same-origin' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(typeof j.detail === 'string' ? j.detail : 'Erreur');
+        return;
+      }
+      await this.refreshDmList();
+      if (this.activeId === dm.channel_id) {
+        this.closeWs();
+        const next = this.firstPickChannel();
+        if (next) await this.selectChannel(next);
+        else if (this.dmConversations.length) await this.selectDm(this.dmConversations[0]);
+        else {
+          this.activeId = null;
+          this.currentView = 'channel';
+          this.activePeerName = '';
+          this.messages = [];
+        }
+      }
+    },
+
+    async openInviteModal(grp) {
+      this.inviteTargetGroup = grp;
+      this.inviteSearch = '';
+      const r = await fetch('/api/users/for-dm', { credentials: 'same-origin' });
+      this.inviteUserPicker = r.ok ? await r.json() : [];
+      this.showInviteModal = true;
+    },
+
+    async inviteUserToGroup(userId) {
+      if (!this.inviteTargetGroup) return;
+      const res = await fetch('/api/groups/' + this.inviteTargetGroup.group.id + '/members', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(typeof j.detail === 'string' ? j.detail : 'Ajout impossible');
+        return;
+      }
+      this.showInviteModal = false;
+      await this.refreshSidebar();
+    },
+
+    async submitNewGroup() {
+      const name = this.newGroupName.trim();
+      if (!name) return;
+      const res = await fetch('/api/groups', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          description: this.newGroupDescription.trim() || null,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof j.detail === 'string' ? j.detail : 'Création impossible');
+        return;
+      }
+      this.showNewGroupModal = false;
+      this.newGroupName = '';
+      this.newGroupDescription = '';
+      await this.refreshSidebar();
+    },
+
+    async deleteGroup(grp) {
+      if (!grp.can_manage) return;
+      if (!confirm('Supprimer le groupe « ' + grp.group.name + ' » et tous ses canaux ?')) return;
+      const res = await fetch('/api/groups/' + grp.group.id, { method: 'DELETE', credentials: 'same-origin' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(typeof j.detail === 'string' ? j.detail : 'Erreur');
+        return;
+      }
+      const wasActiveInGroup = (grp.channels || []).some(c => c.id === this.activeId);
+      await this.refreshSidebar();
+      if (wasActiveInGroup || !this.findChannelById(this.activeId)) {
+        this.closeWs();
+        const next = this.firstPickChannel();
+        if (next) await this.selectChannel(next);
+        else if (this.dmConversations.length) await this.selectDm(this.dmConversations[0]);
+        else {
+          this.activeId = null;
+          this.currentView = 'channel';
+          this.messages = [];
+        }
+      }
+    },
+
+    async submitNewChannel() {
+      const name = this.newChannelName.trim();
+      if (!name) return;
+      const body = {
+        name,
+        topic: this.newChannelTopic.trim() || null,
+        is_private: false,
+        group_id: this.newChannelGroupId,
+      };
+      const res = await fetch('/api/channels', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.id) {
+        this.closeNewChannelModal();
+        this.newChannelName = '';
+        this.newChannelTopic = '';
+        await this.refreshSidebar();
+        await this.selectChannel(j.id);
+      } else {
+        alert(typeof j.detail === 'string' ? j.detail : 'Création impossible');
+      }
+    },
+
+    async deleteChannel(ch) {
+      if (!this.canDeleteChannel(ch)) return;
+      const label = ch.display_label || ch.name;
+      if (!confirm('Supprimer le canal #' + label + ' ? Tous les messages seront supprimés.')) return;
+      const res = await fetch('/api/channels/' + ch.id, { method: 'DELETE', credentials: 'same-origin' });
+      if (res.ok) {
+        await this.refreshSidebar();
+        const flat = this.allChannelsFlat();
+        if (!flat.length) {
+          this.closeWs();
+          if (this.dmConversations.length) await this.selectDm(this.dmConversations[0]);
+          else {
+            this.activeId = null;
+            this.currentView = 'channel';
+            this.activePeerName = '';
+            this.messages = [];
+          }
+        } else if (!flat.some(c => c.id === this.activeId)) {
+          await this.selectChannel(flat[0].id);
+        }
+      } else {
+        const j = await res.json().catch(() => ({}));
+        alert(typeof j.detail === 'string' ? j.detail : 'Erreur');
+      }
+    },
+
+    async _pingPresence() {
+      try {
+        await fetch('/api/me/ping', { method: 'POST', credentials: 'same-origin' });
+        await this.refreshSidebar();
+      } catch (_) {}
+    },
+
+    openGroupFirstChannel(grp) {
+      if (grp.channels && grp.channels.length) this.selectChannel(grp.channels[0].id);
+    },
+
+    async init() {
+      const r = await fetch('/api/ws-token', { credentials: 'same-origin' });
+      if (r.ok) {
+        const j = await r.json();
+        this.wsToken = j.token;
+      }
+      window.addEventListener('focus', () => { this.refreshSidebar(); });
+      await this._pingPresence();
+      if (this._presenceTimer) clearInterval(this._presenceTimer);
+      this._presenceTimer = setInterval(() => this._pingPresence(), 90000);
+      await this.refreshDmList();
+      if (this.activeId) {
+        await this.selectChannel(this.activeId);
+      } else {
+        const pick = this.firstPickChannel();
+        if (pick) await this.selectChannel(pick);
+        else if (this.dmConversations.length) await this.selectDm(this.dmConversations[0]);
+      }
+    },
+
+    initials(name) {
+      if (!name) return '?';
+      const p = name.trim().split(/\s+/);
+      return (p[0][0] + (p[1]?.[0] || '')).toUpperCase().slice(0, 2);
+    },
+    formatTime(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+      } catch { return ''; }
+    },
+
+    async selectChannel(id) {
+      this.closeWs();
+      this.currentView = 'channel';
+      this.activePeerName = '';
+      this.activeId = id;
+      this.sidebarOpen = false;
+      this.editingId = null;
+      await this.loadMessages();
+      this.openWs(id);
+    },
+
+    async loadMessages() {
+      if (!this.activeId) return;
+      this.editingId = null;
+      const q = this.searchQuery.trim();
+      let url = `/api/channels/${this.activeId}/messages`;
+      if (q.length >= 2) url += `?q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { credentials: 'same-origin' });
+      this.messages = res.ok ? await res.json() : [];
+      this.$nextTick(() => { this.scrollToBottom(); });
+    },
+
+    clearSearch() {
+      this.searchQuery = '';
+      this.loadMessages();
+    },
+
+    reconnectWs() {
+      if (!this.activeId || !this.wsToken) return;
+      this.closeWs();
+      this.openWs(this.activeId);
+    },
+
+    openWs(channelId) {
+      if (!this.wsToken) return;
+      if (this._reconnTimer) {
+        clearTimeout(this._reconnTimer);
+        this._reconnTimer = null;
+      }
+      if (this.ws) {
+        try { this.ws.onclose = null; } catch (_) {}
+        this.ws.close();
+        this.ws = null;
+      }
+      this.wsLive = false;
+      this._wsFailures = 0;
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const url = `${proto}://${location.host}/ws/channel/${channelId}?token=${encodeURIComponent(this.wsToken)}`;
+
+      const connect = () => {
+        if (this.activeId !== channelId) return;
+        this.ws = new WebSocket(url);
+        this.ws.onopen = () => {
+          this.wsLive = true;
+          this._wsFailures = 0;
+        };
+        this.ws.onmessage = (ev) => {
+          try {
+            const data = JSON.parse(ev.data);
+            if (data.type === 'message' && data.message && data.message.channel_id === this.activeId) {
+              const i = this.messages.findIndex(m => m.id === data.message.id);
+              if (i >= 0) this.messages[i] = data.message;
+              else this.messages.push(data.message);
+              this.$nextTick(() => this.scrollToBottom());
+            }
+            if (data.type === 'message_deleted' && data.channel_id === this.activeId) {
+              this.messages = this.messages.filter(m => m.id !== data.message_id);
+            }
+          } catch (_) {}
+        };
+        this.ws.onclose = () => {
+          this.wsLive = false;
+          this.ws = null;
+          if (this.activeId !== channelId) return;
+          const delay = Math.min(30000, 1000 * Math.pow(2, this._wsFailures));
+          this._wsFailures = Math.min(this._wsFailures + 1, 8);
+          this._reconnTimer = setTimeout(connect, delay);
+        };
+      };
+      connect();
+    },
+
+    closeWs() {
+      if (this._reconnTimer) {
+        clearTimeout(this._reconnTimer);
+        this._reconnTimer = null;
+      }
+      if (this.ws) {
+        try { this.ws.onclose = null; } catch (_) {}
+        this.ws.close();
+        this.ws = null;
+      }
+      this.wsLive = false;
+    },
+
+    scrollToBottom() {
+      const el = this.$refs.scroll;
+      if (el) el.scrollTop = el.scrollHeight;
+    },
+
+    startEdit(m) {
+      this.editingId = m.id;
+      this.editDraft = m.body;
+    },
+    cancelEdit() {
+      this.editingId = null;
+      this.editDraft = '';
+    },
+    async saveEdit(messageId) {
+      const body = this.editDraft.trim();
+      if (!body) return;
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      });
+      if (res.ok) {
+        this.cancelEdit();
+      } else {
+        const j = await res.json().catch(() => ({}));
+        alert(typeof j.detail === 'string' ? j.detail : 'Modification impossible');
+      }
+    },
+    async removeMessage(m) {
+      if (!confirm('Supprimer ce message ?')) return;
+      const res = await fetch(`/api/messages/${m.id}`, { method: 'DELETE', credentials: 'same-origin' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(typeof j.detail === 'string' ? j.detail : 'Erreur');
+      }
+    },
+
+    async send() {
+      const text = this.draft.trim();
+      if (!text || !this.activeId || this.sending) return;
+      this.sending = true;
+      try {
+        const res = await fetch(`/api/channels/${this.activeId}/messages`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: text }),
+        });
+        if (res.ok) {
+          this.draft = '';
+          const msg = await res.json();
+          const i = this.messages.findIndex(x => x.id === msg.id);
+          if (i >= 0) this.messages[i] = msg;
+          else if (!this.searchQuery.trim() || this.searchQuery.trim().length < 2) this.messages.push(msg);
+          this.$nextTick(() => this.scrollToBottom());
+        }
+      } finally {
+        this.sending = false;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Administration — Univers Diaspora{% endblock %}
+{% block body %}
+<div class="min-h-[100dvh] flex flex-col md:flex-row bg-ud-surface" x-data="adminApp()" x-init="boot()">
+  <!-- Nav latérale admin -->
+  <aside class="border-b border-white/10 bg-ud-navy text-white md:w-56 md:min-w-[14rem] md:border-b-0 md:border-r md:border-white/10">
+    <div class="space-y-4 p-4">
+      <div class="rounded-lg bg-white/10 p-2">
+        {% with title='Administration' %}{% include "partials/brand_compact.html" %}{% endwith %}
+      </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-white/50">Connecté</p>
+        <p class="font-bold">{{ user.display_name }}</p>
+      </div>
+      <a href="/chat" class="block rounded-md bg-white/10 px-3 py-2 text-center text-sm hover:bg-white/20">← Canaux</a>
+    </div>
+  </aside>
+
+  <div class="flex-1 overflow-auto p-4 md:p-8">
+    <h1 class="font-heading mb-6 text-2xl font-bold text-ud-navy">Tableau de bord</h1>
+
+    <!-- Nouveau canal -->
+    <section class="mb-10 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+      <h2 class="mb-4 text-lg font-semibold text-slate-800">Nouveau canal</h2>
+      <form class="flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="createChannel">
+        <div class="flex-1">
+          <label class="mb-1 block text-sm font-medium text-slate-600">Nom</label>
+          <input x-model="newChannel.name" type="text" placeholder="ex. annonces"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-ud-blue focus:ring-2 focus:ring-ud-blue/25" />
+        </div>
+        <div class="flex-1">
+          <label class="mb-1 block text-sm font-medium text-slate-600">Sujet (optionnel)</label>
+          <input x-model="newChannel.topic" type="text"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-ud-blue focus:ring-2 focus:ring-ud-blue/25" />
+        </div>
+        <button type="submit" class="rounded-lg bg-ud-gold px-5 py-2.5 text-sm font-semibold text-ud-navy hover:bg-ud-goldHover">Créer</button>
+      </form>
+      <p x-show="channelMsg" class="mt-2 text-sm" :class="channelErr ? 'text-red-600' : 'text-green-600'" x-text="channelMsg"></p>
+    </section>
+
+    <!-- Canaux existants -->
+    <section class="mb-10 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+      <h2 class="mb-4 text-lg font-semibold text-slate-800">Canaux</h2>
+      <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="border-b border-slate-200 text-slate-500">
+            <tr><th class="pb-2 pr-4">Nom</th><th class="pb-2 pr-4">Groupe</th><th class="pb-2 pr-4">Sujet</th><th class="pb-2">Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for c in channels %}
+            <tr class="border-b border-slate-100">
+              <td class="py-3 pr-4 font-medium">#{{ c.name }}</td>
+              <td class="py-3 pr-4 text-slate-600">{{ c.chat_group.name if c.chat_group else '—' }}</td>
+              <td class="py-3 pr-4 text-slate-600">{{ c.topic or '—' }}</td>
+              <td class="py-3">
+                {% if c.name != 'general' %}
+                <button type="button" @click="deleteChannel({{ c.id }})" class="text-red-600 hover:underline">Supprimer</button>
+                {% else %}
+                <span class="text-slate-400">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <ul class="space-y-3 md:hidden">
+        {% for c in channels %}
+        <li class="rounded-lg border border-slate-100 bg-slate-50 p-3">
+          <div class="font-medium">#{{ c.name }}</div>
+          <div class="text-sm text-slate-600">{% if c.chat_group %}Groupe : {{ c.chat_group.name }}{% else %}Canal général{% endif %}</div>
+          <div class="text-sm text-slate-600">{{ c.topic or '—' }}</div>
+          {% if c.name != 'general' %}
+          <button type="button" @click="deleteChannel({{ c.id }})" class="mt-2 text-sm text-red-600">Supprimer</button>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <!-- Nouvel utilisateur -->
+    <section class="mb-10 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+      <h2 class="mb-4 text-lg font-semibold text-slate-800">Nouvel utilisateur</h2>
+      <form class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" @submit.prevent="createUser">
+        <div>
+          <label class="mb-1 block text-sm font-medium text-slate-600">E-mail</label>
+          <input x-model="newUser.email" type="email" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base" />
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium text-slate-600">Nom affiché</label>
+          <input x-model="newUser.display_name" type="text" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base" />
+        </div>
+        <div>
+          <label class="mb-1 block text-sm font-medium text-slate-600">Mot de passe</label>
+          <input x-model="newUser.password" type="password" required minlength="8" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base" />
+        </div>
+        <div class="flex items-end gap-2">
+          <label class="flex cursor-pointer items-center gap-2 pb-2 text-sm">
+            <input type="checkbox" x-model="newUser.is_admin" class="rounded border-slate-300" />
+            Administrateur
+          </label>
+          <button type="submit" class="rounded-lg bg-ud-gold px-4 py-2 text-sm font-semibold text-ud-navy hover:bg-ud-goldHover">Ajouter</button>
+        </div>
+      </form>
+      <p x-show="userMsg" class="mt-2 text-sm" :class="userErr ? 'text-red-600' : 'text-green-600'" x-text="userMsg"></p>
+    </section>
+
+    <!-- Utilisateurs -->
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:p-6">
+      <h2 class="mb-4 text-lg font-semibold text-slate-800">Utilisateurs</h2>
+      <p class="mb-4 text-sm text-slate-600">
+        <strong>Présence :</strong> « En ligne » si activité sur le chat ou cette page dans les {{ presence_online_seconds // 60 }} dernières minutes.
+        La <strong>dernière déconnexion</strong> est enregistrée lorsque l’utilisateur clique sur Déconnexion.
+      </p>
+      <div class="hidden xl:block overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="border-b border-slate-200 text-slate-500">
+            <tr>
+              <th class="pb-2 pr-3">E-mail</th>
+              <th class="pb-2 pr-3">Nom</th>
+              <th class="pb-2 pr-3">Rôle</th>
+              <th class="pb-2 pr-3">Statut</th>
+              <th class="pb-2 pr-3">Présence</th>
+              <th class="pb-2 pr-3">Dernière connexion</th>
+              <th class="pb-2 pr-3">Dernière déconnexion</th>
+              <th class="pb-2 pr-3">Dernière activité</th>
+              <th class="pb-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr class="border-b border-slate-100">
+              <td class="py-3 pr-3">{{ u.email }}</td>
+              <td class="py-3 pr-3">{{ u.display_name }}</td>
+              <td class="py-3 pr-3">{% if u.is_admin %}Admin{% else %}Membre{% endif %}</td>
+              <td class="py-3 pr-3">{% if u.is_active %}Actif{% else %}Désactivé{% endif %}</td>
+              <td class="py-3 pr-3">
+                {% if u.last_seen_at | presence_online(presence_now, presence_online_seconds) %}
+                <span class="font-medium text-emerald-600">En ligne</span>
+                {% else %}
+                <span class="text-slate-500">Hors ligne</span>
+                {% endif %}
+              </td>
+              <td class="py-3 pr-3 whitespace-nowrap text-slate-600">{{ u.last_login_at | dt_admin }}</td>
+              <td class="py-3 pr-3 whitespace-nowrap text-slate-600">{{ u.last_logout_at | dt_admin }}</td>
+              <td class="py-3 pr-3 whitespace-nowrap text-slate-600">{{ u.last_seen_at | dt_admin }}</td>
+              <td class="py-3">
+                {% if u.id != user.id %}
+                <div class="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
+                  <button type="button" @click="toggleActive({{ u.id }})" class="text-left text-ud-blue hover:underline">Activer / désactiver</button>
+                  <button type="button" @click="toggleAdmin({{ u.id }}, {{ u.is_admin | tojson }})" class="text-left text-ud-blue hover:underline">{% if u.is_admin %}Retirer administrateur{% else %}Nommer administrateur{% endif %}</button>
+                  <button type="button" @click="deleteUser({{ u.id }}, {{ u.display_name | tojson }})" class="text-left text-red-600 hover:underline">Supprimer le compte</button>
+                </div>
+                {% else %}
+                <span class="text-slate-400">Vous</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <ul class="space-y-3 xl:hidden">
+        {% for u in users %}
+        <li class="rounded-lg border border-slate-100 bg-slate-50 p-4">
+          <div class="font-medium text-slate-900">{{ u.display_name }}</div>
+          <div class="text-sm text-slate-600">{{ u.email }}</div>
+          <div class="mt-2 flex flex-wrap gap-2 text-xs">
+            <span class="rounded bg-slate-200 px-2 py-0.5">{% if u.is_admin %}Admin{% else %}Membre{% endif %}</span>
+            <span class="rounded bg-slate-200 px-2 py-0.5">{% if u.is_active %}Actif{% else %}Désactivé{% endif %}</span>
+            {% if u.last_seen_at | presence_online(presence_now, presence_online_seconds) %}
+            <span class="rounded bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">En ligne</span>
+            {% else %}
+            <span class="rounded bg-slate-200 px-2 py-0.5 text-slate-600">Hors ligne</span>
+            {% endif %}
+          </div>
+          <dl class="mt-3 space-y-1 text-xs text-slate-600">
+            <div><dt class="inline font-medium text-slate-500">Connexion :</dt> <dd class="inline">{{ u.last_login_at | dt_admin }}</dd></div>
+            <div><dt class="inline font-medium text-slate-500">Déconnexion :</dt> <dd class="inline">{{ u.last_logout_at | dt_admin }}</dd></div>
+            <div><dt class="inline font-medium text-slate-500">Activité :</dt> <dd class="inline">{{ u.last_seen_at | dt_admin }}</dd></div>
+          </dl>
+          {% if u.id != user.id %}
+          <div class="mt-3 flex flex-col gap-2 text-sm">
+            <button type="button" @click="toggleActive({{ u.id }})" class="text-left text-ud-blue">Activer / désactiver</button>
+            <button type="button" @click="toggleAdmin({{ u.id }}, {{ u.is_admin | tojson }})" class="text-left text-ud-blue">{% if u.is_admin %}Retirer administrateur{% else %}Nommer administrateur{% endif %}</button>
+            <button type="button" @click="deleteUser({{ u.id }}, {{ u.display_name | tojson }})" class="text-left text-red-600">Supprimer le compte</button>
+          </div>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script>
+function adminApp() {
+  return {
+    newChannel: { name: '', topic: '' },
+    newUser: { email: '', display_name: '', password: '', is_admin: false },
+    channelMsg: '', channelErr: false,
+    userMsg: '', userErr: false,
+    _presenceTimer: null,
+    async _pingPresence() {
+      try {
+        await fetch('/api/me/ping', { method: 'POST', credentials: 'same-origin' });
+      } catch (_) {}
+    },
+    boot() {
+      this._pingPresence();
+      if (this._presenceTimer) clearInterval(this._presenceTimer);
+      this._presenceTimer = setInterval(() => this._pingPresence(), 90000);
+    },
+    async createChannel() {
+      this.channelMsg = '';
+      const res = await fetch('/api/channels', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: this.newChannel.name,
+          topic: this.newChannel.topic || null,
+          is_private: false,
+        }),
+      });
+      if (res.ok) {
+        this.channelErr = false;
+        this.channelMsg = 'Canal créé.';
+        this.newChannel = { name: '', topic: '' };
+        setTimeout(() => location.reload(), 600);
+      } else {
+        const j = await res.json().catch(() => ({}));
+        this.channelErr = true;
+        this.channelMsg = j.detail || 'Erreur';
+      }
+    },
+    async deleteChannel(id) {
+      if (!confirm('Supprimer ce canal ?')) return;
+      const res = await fetch('/api/channels/' + id, { method: 'DELETE', credentials: 'same-origin' });
+      if (res.ok) location.reload();
+      else alert('Suppression impossible');
+    },
+    async createUser() {
+      this.userMsg = '';
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.newUser),
+      });
+      if (res.ok) {
+        this.userErr = false;
+        this.userMsg = 'Utilisateur créé.';
+        this.newUser = { email: '', display_name: '', password: '', is_admin: false };
+        setTimeout(() => location.reload(), 600);
+      } else {
+        const j = await res.json().catch(() => ({}));
+        this.userErr = true;
+        this.userMsg = typeof j.detail === 'string' ? j.detail : 'Erreur';
+      }
+    },
+    async toggleActive(id) {
+      const res = await fetch('/api/admin/users/' + id + '/toggle-active', { method: 'PATCH', credentials: 'same-origin' });
+      if (res.ok) location.reload();
+      else alert((await res.json().catch(() => ({}))).detail || 'Erreur');
+    },
+    async toggleAdmin(id, isAdmin) {
+      const msg = isAdmin
+        ? 'Retirer les droits administrateur à cet utilisateur ?'
+        : 'Nommer cet utilisateur administrateur ?';
+      if (!confirm(msg)) return;
+      const res = await fetch('/api/admin/users/' + id + '/toggle-admin', { method: 'PATCH', credentials: 'same-origin' });
+      if (res.ok) location.reload();
+      else alert((await res.json().catch(() => ({}))).detail || 'Erreur');
+    },
+    async deleteUser(id, displayName) {
+      const label = displayName || 'cet utilisateur';
+      if (!confirm('Supprimer définitivement le compte de « ' + label + ' » ? Ses messages et données associées seront effacés. Cette action est irréversible.')) return;
+      const res = await fetch('/api/admin/users/' + id, { method: 'DELETE', credentials: 'same-origin' });
+      if (res.ok) location.reload();
+      else alert((await res.json().catch(() => ({}))).detail || 'Suppression impossible');
+    },
+  };
+}
+</script>
+{% endblock %}

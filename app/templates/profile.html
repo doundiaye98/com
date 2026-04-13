@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Mon profil — Univers Diaspora{% endblock %}
+{% block body %}
+<div class="min-h-[100dvh] bg-ud-surface">
+  <header class="sticky top-0 z-10 border-b border-ud-navy/10 bg-white px-4 py-3 shadow-sm">
+    <div class="mx-auto flex max-w-2xl items-center justify-between gap-3">
+      <div class="flex min-w-0 items-center gap-3">
+        <img src="/static/brand/logo-univers.jpg" alt="" class="h-10 w-auto shrink-0 object-contain" width="100" height="40" />
+        <h1 class="font-heading truncate text-lg font-bold text-ud-navy">Mon profil</h1>
+      </div>
+      <a href="/chat" class="shrink-0 rounded-lg bg-ud-navy/5 px-3 py-2 text-sm font-medium text-ud-navy hover:bg-ud-navy/10">← Canaux</a>
+    </div>
+  </header>
+
+  <div class="mx-auto max-w-2xl space-y-6 p-4 md:p-8" x-data="profileApp()" x-init="boot()">
+    <section class="rounded-xl border border-ud-navy/10 bg-white p-5 shadow-sm md:p-6">
+      <h2 class="font-heading mb-4 text-base font-semibold text-ud-navy">Photo professionnelle</h2>
+      <div class="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+        <div class="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-slate-200 ring-2 ring-slate-100">
+          <img id="avatar-preview"
+            src="{% if user.avatar_filename %}/media/avatars/{{ user.avatar_filename }}{% endif %}"
+            alt=""
+            class="h-full w-full object-cover {% if not user.avatar_filename %}hidden{% endif %}" />
+          <div id="avatar-placeholder" class="flex h-full w-full items-center justify-center text-2xl font-bold text-slate-500 {% if user.avatar_filename %}hidden{% endif %}">
+            {{ user.display_name[:1] | upper }}
+          </div>
+        </div>
+        <div class="min-w-0 flex-1 space-y-2">
+          <p class="text-sm text-slate-600">JPEG, PNG ou WebP — max. 3 Mo. L’image est recadrée au carré (512 px max).</p>
+          <div class="flex flex-wrap gap-2">
+            <label class="cursor-pointer rounded-lg bg-ud-gold px-4 py-2 text-sm font-semibold text-ud-navy hover:bg-ud-goldHover">
+              Choisir une photo
+              <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden" @change="uploadAvatar($event)" />
+            </label>
+            <button type="button" @click="removeAvatar" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Retirer la photo</button>
+          </div>
+          <p x-show="avatarMsg" class="text-sm" :class="avatarErr ? 'text-red-600' : 'text-green-600'" x-text="avatarMsg"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-xl border border-ud-navy/10 bg-white p-5 shadow-sm md:p-6">
+      <h2 class="font-heading mb-4 text-base font-semibold text-ud-navy">Informations du compte</h2>
+      <form class="space-y-4" @submit.prevent="saveProfile">
+        <div>
+          <label for="email-ro" class="mb-1 block text-sm font-medium text-slate-600">E-mail</label>
+          <input id="email-ro" type="email" value="{{ user.email }}" readonly
+            class="w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-base text-slate-600" />
+          <p class="mt-1 text-xs text-slate-400">L’e-mail ne peut pas être modifié ici.</p>
+        </div>
+        <div>
+          <label for="display_name" class="mb-1 block text-sm font-medium text-slate-600">Nom affiché</label>
+          <input id="display_name" x-model="displayName" type="text" maxlength="120" required
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-ud-blue focus:ring-2 focus:ring-ud-blue/25" />
+        </div>
+        <div>
+          <label for="new_password" class="mb-1 block text-sm font-medium text-slate-600">Nouveau mot de passe</label>
+          <input id="new_password" x-model="newPassword" type="password" autocomplete="new-password" minlength="8"
+            placeholder="Laisser vide pour ne pas changer"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-base focus:border-ud-blue focus:ring-2 focus:ring-ud-blue/25" />
+          <p class="mt-1 text-xs text-slate-400">Si renseigné : 8 caractères min., une lettre et un chiffre.</p>
+        </div>
+        <button type="submit" class="rounded-lg bg-ud-gold px-5 py-2.5 text-sm font-semibold text-ud-navy hover:bg-ud-goldHover disabled:opacity-50" :disabled="saving">
+          Enregistrer
+        </button>
+        <p x-show="profileMsg" class="text-sm" :class="profileErr ? 'text-red-600' : 'text-green-600'" x-text="profileMsg"></p>
+      </form>
+    </section>
+  </div>
+</div>
+
+<script>
+function profileApp() {
+  return {
+    displayName: {{ user.display_name | tojson }},
+    newPassword: '',
+    saving: false,
+    profileMsg: '',
+    profileErr: false,
+    avatarMsg: '',
+    avatarErr: false,
+    _presenceTimer: null,
+    async _pingPresence() {
+      try {
+        await fetch('/api/me/ping', { method: 'POST', credentials: 'same-origin' });
+      } catch (_) {}
+    },
+    boot() {
+      this._pingPresence();
+      if (this._presenceTimer) clearInterval(this._presenceTimer);
+      this._presenceTimer = setInterval(() => this._pingPresence(), 90000);
+    },
+    async saveProfile() {
+      this.profileMsg = '';
+      const body = {};
+      if (this.displayName.trim()) body.display_name = this.displayName.trim();
+      if (this.newPassword.length) body.new_password = this.newPassword;
+      if (!body.display_name && !body.new_password) {
+        this.profileErr = true;
+        this.profileMsg = 'Modifiez au moins un champ.';
+        return;
+      }
+      this.saving = true;
+      try {
+        const res = await fetch('/api/profile', {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.profileErr = false;
+          this.profileMsg = 'Profil mis à jour.';
+          this.newPassword = '';
+        } else {
+          this.profileErr = true;
+          this.profileMsg = typeof j.detail === 'string' ? j.detail : 'Erreur';
+        }
+      } finally {
+        this.saving = false;
+      }
+    },
+    async uploadAvatar(ev) {
+      this.avatarMsg = '';
+      const f = ev.target.files && ev.target.files[0];
+      ev.target.value = '';
+      if (!f) return;
+      const fd = new FormData();
+      fd.append('file', f);
+      const res = await fetch('/api/profile/avatar', { method: 'POST', credentials: 'same-origin', body: fd });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.avatar_url) {
+        this.avatarErr = false;
+        this.avatarMsg = 'Photo mise à jour.';
+        const img = document.getElementById('avatar-preview');
+        const ph = document.getElementById('avatar-placeholder');
+        if (img) { img.src = j.avatar_url + '?t=' + Date.now(); img.classList.remove('hidden'); }
+        if (ph) ph.classList.add('hidden');
+      } else {
+        this.avatarErr = true;
+        this.avatarMsg = typeof j.detail === 'string' ? j.detail : 'Envoi impossible';
+      }
+    },
+    async removeAvatar() {
+      if (!confirm('Retirer votre photo de profil ?')) return;
+      this.avatarMsg = '';
+      const res = await fetch('/api/profile/avatar', { method: 'DELETE', credentials: 'same-origin' });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        this.avatarErr = false;
+        this.avatarMsg = 'Photo retirée.';
+        const img = document.getElementById('avatar-preview');
+        const ph = document.getElementById('avatar-placeholder');
+        if (img) { img.removeAttribute('src'); img.classList.add('hidden'); }
+        if (ph) ph.classList.remove('hidden');
+      } else {
+        this.avatarErr = true;
+        this.avatarMsg = typeof j.detail === 'string' ? j.detail : 'Erreur';
+      }
+    },
+  };
+}
+</script>
+{% endblock %}
