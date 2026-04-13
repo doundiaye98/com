@@ -1,0 +1,19 @@
+# Blueprint Render : https://render.com/docs/blueprint-spec
+# Déploiement : New → Blueprint → connecter le dépôt Git contenant ce fichier.
+services:
+  - type: web
+    name: communication-interne
+    runtime: python
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SESSION_HTTPS_ONLY
+        value: "1"
+      - key: SESSION_MAX_AGE
+        value: "604800"
+      - key: ALLOW_PUBLIC_REGISTRATION
+        value: "1"
