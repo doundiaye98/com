@@ -9,6 +9,9 @@ services:
     startCommand: python run.py
     healthCheckPath: /health
     envVars:
+      # Obligatoire : SQLAlchemy 2.0.36 plante sur Python 3.14 (typing.Union).
+      - key: PYTHON_VERSION
+        value: 3.12.7
       - key: SECRET_KEY
         generateValue: true
       - key: SESSION_HTTPS_ONLY
