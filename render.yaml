@@ -6,7 +6,8 @@ services:
     runtime: python
     branch: main
     buildCommand: pip install -r requirements.txt
-    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Via script shell pour garantir app.main:app sans espace (voir doc Render / YAML et le dashboard)
+    startCommand: bash start.sh
     healthCheckPath: /health
     envVars:
       - key: SECRET_KEY
