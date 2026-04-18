@@ -1,14 +1,24 @@
+import ssl
 from collections.abc import AsyncGenerator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from app.config import BASE_DIR, DATABASE_URL
+from app.config import BASE_DIR, DATABASE_URL, IS_SQLITE_DB, USE_POSTGRES_SSL
 
 (BASE_DIR / "data").mkdir(parents=True, exist_ok=True)
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+_pg_connect: dict = {}
+if not IS_SQLITE_DB and USE_POSTGRES_SSL:
+    _pg_connect["ssl"] = ssl.create_default_context()
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    connect_args=_pg_connect,
+)
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -26,6 +36,8 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if not IS_SQLITE_DB:
+            return
         r = await conn.execute(text("PRAGMA table_info(users)"))
         cols = [row[1] for row in r.fetchall()]
         if "avatar_filename" not in cols:

@@ -1,4 +1,10 @@
 # Blueprint Render : https://render.com/docs/blueprint-spec
+#
+# Base de données : créez une PostgreSQL sur Render (Dashboard → New → PostgreSQL),
+# puis liez-la à ce Web Service. Render injecte DATABASE_URL automatiquement.
+# Sans PostgreSQL, l’app utilise SQLite sur un disque éphémère : comptes et messages
+# disparaissent au redémarrage / mise en veille.
+#
 # Déploiement : New → Blueprint → connecter le dépôt Git contenant ce fichier.
 services:
   - type: web

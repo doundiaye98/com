@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -10,7 +11,28 @@ try:
 except ImportError:
     pass
 
-DATABASE_URL = "sqlite+aiosqlite:///" + str(BASE_DIR / "data" / "internal_comms.db")
+
+_RAW_DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+# Render : …?sslmode=require — asyncpg ne comprend pas sslmode ; on retire et on active SSL côté client (db.py).
+USE_POSTGRES_SSL = "sslmode=require" in _RAW_DATABASE_URL.lower()
+
+
+def _resolve_database_url() -> str:
+    """Local : SQLite fichier. Production (Render, etc.) : variable DATABASE_URL → PostgreSQL."""
+    if not _RAW_DATABASE_URL:
+        return "sqlite+aiosqlite:///" + str(BASE_DIR / "data" / "internal_comms.db")
+    url = _RAW_DATABASE_URL
+    if url.startswith("postgres://"):
+        url = "postgresql+asyncpg://" + url[len("postgres://") :]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+    url = re.sub(r"[?&]sslmode=[^&]*", "", url, flags=re.IGNORECASE)
+    url = url.replace("?&", "?").strip("?&")
+    return url
+
+
+DATABASE_URL = _resolve_database_url()
+IS_SQLITE_DB = DATABASE_URL.startswith("sqlite")
 AVATAR_UPLOAD_DIR = BASE_DIR / "storage" / "avatars"
 MAX_AVATAR_BYTES = 3 * 1024 * 1024  # 3 Mo
 AVATAR_THUMB_SIZE = 512
