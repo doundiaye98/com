@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Connexion — Univers Diaspora{% endblock %}
 {% block body %}
-<div class="min-h-full flex flex-col items-center justify-center p-4 sm:p-6">
-  <div class="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg ring-1 ring-ud-navy/10">
+<div class="auth-shell min-h-full flex flex-col items-center justify-center p-4 sm:p-6">
+  <div class="auth-card w-full max-w-md p-8">
     <div class="mb-8">
       {% include "partials/brand_lockup.html" %}
-      <h1 class="font-heading mt-6 text-center text-xl font-bold text-ud-navy">Espace interne</h1>
+      <h1 class="auth-title font-heading mt-6 text-center font-bold text-ud-navy">Espace interne</h1>
       <p class="mt-1 text-center text-sm text-slate-600">Connectez-vous pour accéder aux canaux</p>
     </div>
     {% if notice %}
@@ -18,15 +18,15 @@
       <div>
         <label for="email" class="mb-1 block text-sm font-medium text-ud-navy">E-mail</label>
         <input id="email" name="email" type="email" autocomplete="username" required
-          class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base shadow-sm focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25" />
+          class="auth-input w-full px-3 py-2.5 text-base shadow-sm focus:outline-none" />
       </div>
       <div>
         <label for="password" class="mb-1 block text-sm font-medium text-ud-navy">Mot de passe</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required
-          class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base shadow-sm focus:border-ud-blue focus:outline-none focus:ring-2 focus:ring-ud-blue/25" />
+          class="auth-input w-full px-3 py-2.5 text-base shadow-sm focus:outline-none" />
       </div>
       <button type="submit"
-        class="w-full rounded-lg bg-ud-gold py-3 text-sm font-semibold text-ud-navy shadow hover:bg-ud-goldHover focus:outline-none focus:ring-2 focus:ring-ud-gold/50 active:scale-[0.99] transition">
+        class="auth-button w-full py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-ud-gold/40 active:scale-[0.99] transition">
         Se connecter
       </button>
     </form>

@@ -19,6 +19,8 @@ data/*.db-journal
 # Fichiers uploadés (avatars)
 storage/avatars/*
 !storage/avatars/.gitkeep
+storage/messages/*
+!storage/messages/.gitkeep
 
 # IDE
 .idea/

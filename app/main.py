@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
+import re
+import secrets
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, status
@@ -62,7 +65,6 @@ from app.schemas import (
     DmOpenRequest,
     GroupWithChannelsOut,
     MessageBroadcast,
-    MessageCreate,
     MessageDeletedBroadcast,
     MessageOut,
     MessageUpdate,
@@ -80,6 +82,22 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 WS_TOKEN_SALT = "internal-comms-ws"
+MENTION_RE = re.compile(r"@([A-Za-z0-9._-]{2,120})")
+MESSAGE_UPLOAD_DIR = BASE_DIR / "storage" / "messages"
+MAX_MESSAGE_FILE_BYTES = 25 * 1024 * 1024
+ALLOWED_MESSAGE_MIME_PREFIXES = ("image/", "video/")
+ALLOWED_MESSAGE_MIME_EXACT = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "application/zip",
+    "application/x-zip-compressed",
+}
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 login_limiter = SlidingWindowLimiter(RATE_LIMIT_LOGIN_MAX, RATE_LIMIT_LOGIN_WINDOW_SEC)
@@ -122,6 +140,49 @@ def slugify_channel_name(name: str) -> str:
     return slug
 
 
+def _parse_mentions(body: str, users: list[User]) -> list[int]:
+    if not body:
+        return []
+    wanted = {m.group(1).strip().lower() for m in MENTION_RE.finditer(body)}
+    if not wanted:
+        return []
+    out: list[int] = []
+    for u in users:
+        key = u.display_name.strip().lower()
+        if key in wanted:
+            out.append(u.id)
+    return sorted(set(out))
+
+
+def _is_allowed_message_mime(content_type: str | None) -> bool:
+    if not content_type:
+        return False
+    ct = content_type.lower().strip()
+    if any(ct.startswith(prefix) for prefix in ALLOWED_MESSAGE_MIME_PREFIXES):
+        return True
+    return ct in ALLOWED_MESSAGE_MIME_EXACT
+
+
+async def _save_message_file(file: UploadFile) -> tuple[str, str, str, int]:
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Fichier vide.")
+    if len(content) > MAX_MESSAGE_FILE_BYTES:
+        raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 25 Mo).")
+    if not _is_allowed_message_mime(file.content_type):
+        raise HTTPException(
+            status_code=400,
+            detail="Type de fichier non supporté (images, vidéos et documents uniquement).",
+        )
+    original = (file.filename or "fichier").strip()[:255]
+    safe_name = re.sub(r"[^A-Za-z0-9._ -]", "_", original).strip() or "fichier"
+    ext = Path(safe_name).suffix[:12]
+    stored = f"{secrets.token_hex(12)}{ext}"
+    target = MESSAGE_UPLOAD_DIR / stored
+    target.write_bytes(content)
+    return (f"/media/messages/{stored}", safe_name, (file.content_type or "application/octet-stream"), len(content))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
@@ -147,6 +208,8 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 AVATAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/media/avatars", StaticFiles(directory=str(AVATAR_UPLOAD_DIR)), name="avatars")
+MESSAGE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/media/messages", StaticFiles(directory=str(MESSAGE_UPLOAD_DIR)), name="message-files")
 
 
 def build_user_out(u: User) -> UserOut:
@@ -227,6 +290,14 @@ def message_to_out(m: Message) -> MessageOut:
     av = None
     if m.author:
         av = avatar_public_url(m.author.avatar_filename)
+    mentions: list[int] = []
+    if m.mention_user_ids:
+        try:
+            raw = json.loads(m.mention_user_ids)
+            if isinstance(raw, list):
+                mentions = [int(x) for x in raw if isinstance(x, int) or (isinstance(x, str) and x.isdigit())]
+        except (ValueError, TypeError):
+            mentions = []
     return MessageOut(
         id=m.id,
         channel_id=m.channel_id,
@@ -234,6 +305,11 @@ def message_to_out(m: Message) -> MessageOut:
         author_name=author_name,
         author_avatar_url=av,
         body=m.body,
+        mentions=mentions,
+        attachment_url=m.attachment_url,
+        attachment_name=m.attachment_name,
+        attachment_mime=m.attachment_mime,
+        attachment_size=m.attachment_size,
         created_at=m.created_at,
         edited_at=m.edited_at,
     )
@@ -892,9 +968,10 @@ async def list_messages(
 @app.post("/api/channels/{channel_id}/messages", response_model=MessageOut)
 async def post_message(
     channel_id: int,
-    body: MessageCreate,
     session: Annotated[AsyncSession, Depends(get_session)],
     user: Annotated[User, Depends(get_current_user)],
+    body: str = Form(""),
+    file: UploadFile | None = File(default=None),
 ):
     cr = await session.execute(
         select(Channel).options(selectinload(Channel.chat_group)).where(Channel.id == channel_id)
@@ -903,7 +980,29 @@ async def post_message(
     if ch is None:
         raise HTTPException(status_code=404)
     await ensure_channel_access(session, user, ch)
-    msg = Message(channel_id=channel_id, user_id=user.id, body=body.body.strip())
+    text = body.strip()
+    if not text and file is None:
+        raise HTTPException(status_code=400, detail="Message vide.")
+    mention_ids: list[int] = []
+    if text:
+        users_r = await session.execute(select(User).where(User.is_active.is_(True)))
+        mention_ids = _parse_mentions(text, list(users_r.scalars().all()))
+    attachment_url = None
+    attachment_name = None
+    attachment_mime = None
+    attachment_size = None
+    if file is not None:
+        attachment_url, attachment_name, attachment_mime, attachment_size = await _save_message_file(file)
+    msg = Message(
+        channel_id=channel_id,
+        user_id=user.id,
+        body=text,
+        mention_user_ids=(json.dumps(mention_ids) if mention_ids else None),
+        attachment_url=attachment_url,
+        attachment_name=attachment_name,
+        attachment_mime=attachment_mime,
+        attachment_size=attachment_size,
+    )
     session.add(msg)
     ch.last_activity_at = _utcnow()
     await session.commit()
@@ -915,6 +1014,11 @@ async def post_message(
         author_name=user.display_name,
         author_avatar_url=avatar_public_url(user.avatar_filename),
         body=msg.body,
+        mentions=mention_ids,
+        attachment_url=attachment_url,
+        attachment_name=attachment_name,
+        attachment_mime=attachment_mime,
+        attachment_size=attachment_size,
         created_at=msg.created_at,
         edited_at=None,
     )
@@ -946,7 +1050,11 @@ async def patch_message(
             status_code=400,
             detail=f"Modification impossible après {MESSAGE_EDIT_WINDOW_MINUTES} minutes.",
         )
-    msg.body = body.body.strip()
+    clean_body = body.body.strip()
+    users_r = await session.execute(select(User).where(User.is_active.is_(True)))
+    mention_ids = _parse_mentions(clean_body, list(users_r.scalars().all()))
+    msg.body = clean_body
+    msg.mention_user_ids = json.dumps(mention_ids) if mention_ids else None
     msg.edited_at = _utcnow()
     await session.commit()
     r2 = await session.execute(

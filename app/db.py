@@ -46,6 +46,17 @@ async def init_db() -> None:
         mcols = [row[1] for row in rm.fetchall()]
         if "edited_at" not in mcols:
             await conn.execute(text("ALTER TABLE messages ADD COLUMN edited_at DATETIME"))
+        for col, ddl in (
+            ("mention_user_ids", "ALTER TABLE messages ADD COLUMN mention_user_ids TEXT"),
+            ("attachment_url", "ALTER TABLE messages ADD COLUMN attachment_url VARCHAR(255)"),
+            ("attachment_name", "ALTER TABLE messages ADD COLUMN attachment_name VARCHAR(255)"),
+            ("attachment_mime", "ALTER TABLE messages ADD COLUMN attachment_mime VARCHAR(120)"),
+            ("attachment_size", "ALTER TABLE messages ADD COLUMN attachment_size INTEGER"),
+        ):
+            rp = await conn.execute(text("PRAGMA table_info(messages)"))
+            cur_cols = [row[1] for row in rp.fetchall()]
+            if col not in cur_cols:
+                await conn.execute(text(ddl))
         rch = await conn.execute(text("PRAGMA table_info(channels)"))
         chcols = [row[1] for row in rch.fetchall()]
         if "created_by_id" not in chcols:

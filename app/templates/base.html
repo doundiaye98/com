@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#002157" />
+  <meta name="theme-color" content="#0b1538" />
   <title>{% block title %}Univers Diaspora — Communication interne{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -12,17 +12,17 @@
         extend: {
           colors: {
             ud: {
-              navy: '#002157',
-              navyDark: '#001440',
-              blue: '#4A76B2',
-              gold: '#D4AF37',
-              goldHover: '#b8922d',
-              surface: '#f0f4fa',
+              navy: '#0d1b45',
+              navyDark: '#070f2c',
+              blue: '#3e74d8',
+              gold: '#ffcf70',
+              goldHover: '#f3ba4f',
+              surface: '#f4f7ff',
             },
           },
           fontFamily: {
-            sans: ['Lato', 'system-ui', 'sans-serif'],
-            heading: ['Montserrat', 'Lato', 'system-ui', 'sans-serif'],
+            sans: ['Manrope', 'system-ui', 'sans-serif'],
+            heading: ['Cormorant Garamond', 'Manrope', 'serif'],
           },
         },
       },
@@ -30,12 +30,13 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;1,400&family=Montserrat:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/app.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
   {% block head %}{% endblock %}
 </head>
 <body class="h-full bg-ud-surface font-sans text-slate-900 antialiased">
+  <div class="page-aura" aria-hidden="true"></div>
   {% block body %}{% endblock %}
 </body>
 </html>

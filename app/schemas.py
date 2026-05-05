@@ -126,6 +126,11 @@ class MessageOut(BaseModel):
     author_name: str
     author_avatar_url: str | None = None
     body: str
+    mentions: list[int] = []
+    attachment_url: str | None = None
+    attachment_name: str | None = None
+    attachment_mime: str | None = None
+    attachment_size: int | None = None
     created_at: datetime
     edited_at: datetime | None = None
 

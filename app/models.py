@@ -86,6 +86,11 @@ class Message(Base):
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(Text)
+    mention_user_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attachment_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachment_mime: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    attachment_size: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

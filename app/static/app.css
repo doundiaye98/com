@@ -1,8 +1,78 @@
-/* Charte Univers Diaspora — finitions UI */
+/* Direction visuelle: dark editorial, gold accents */
 :root {
-  --ud-navy: #002157;
-  --ud-blue: #4a76b2;
-  --ud-gold: #d4af37;
+  --ud-navy: #0d1b45;
+  --ud-blue: #3e74d8;
+  --ud-gold: #ffcf70;
+  --ud-ink: #0f172a;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+.page-aura {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(62, 116, 216, 0.22), transparent 30%),
+    radial-gradient(circle at 92% 18%, rgba(255, 207, 112, 0.2), transparent 26%),
+    radial-gradient(circle at 52% 100%, rgba(13, 27, 69, 0.16), transparent 35%),
+    linear-gradient(165deg, #f7f9ff 0%, #edf2ff 45%, #f8fbff 100%);
+}
+
+.auth-shell {
+  position: relative;
+}
+
+.auth-card {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.93), rgba(247, 250, 255, 0.84));
+  box-shadow:
+    0 24px 55px rgba(13, 27, 69, 0.12),
+    0 4px 14px rgba(13, 27, 69, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.auth-title {
+  letter-spacing: 0.02em;
+  font-size: clamp(1.45rem, 1.2rem + 0.9vw, 1.95rem);
+}
+
+.auth-input {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(62, 116, 216, 0.22);
+  background-color: rgba(255, 255, 255, 0.95);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.auth-input:focus {
+  border-color: rgba(62, 116, 216, 0.7);
+  box-shadow: 0 0 0 4px rgba(62, 116, 216, 0.16);
+}
+
+.auth-button {
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, #ffd98f, #ffcf70 55%, #f2ba57);
+  color: #0f1b45;
+  box-shadow: 0 14px 20px rgba(255, 207, 112, 0.32);
+}
+
+.auth-button:hover {
+  filter: brightness(0.98);
+}
+
+.chat-main-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(246, 249, 255, 0.92));
+}
+
+.chat-sidebar {
+  background:
+    radial-gradient(circle at 90% 0, rgba(255, 207, 112, 0.16), transparent 34%),
+    linear-gradient(185deg, #0d1b45 0%, #081235 100%);
 }
 
 .messages-scroll {
@@ -28,5 +98,6 @@
 h1.font-heading,
 h2.font-heading,
 h3.font-heading {
-  letter-spacing: 0.02em;
+  letter-spacing: 0.015em;
+  font-weight: 700;
 }
